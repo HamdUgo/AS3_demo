@@ -1,0 +1,698 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light}body{margin:0;font:14px system-ui,sans-serif;background:#fafafa}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>Step-Back Repair</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&family=Atkinson+Hyperlegible+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the working assistant (conversation, what it understood, answers, input) fills the main column;
+   a quieter side column names the repair behavior on show and the three-channel uncertainty cue. Stacks at phone width. */
+:root {
+  --bg: #EDF1F3;
+  --surface: #FFFFFF;
+  --sunk: #E2E8EC;
+  --ink: #13222A;
+  --muted: #4F626C;
+  --line: #C9D4DA;
+  --accent: #1B57B5;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #DDE8FA;
+  --unsure: #8F4A00;
+  --unsure-line: #D98A1C;
+  --unsure-bg: #FFF0D2;
+  --ok: #17694A;
+  --ok-bg: #DAF1E6;
+  --font-text: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", Verdana, "Segoe UI", sans-serif;
+  --font-util: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F181D; --surface: #18242B; --sunk: #121C22; --ink: #E9F0F3; --muted: #9FB2BC; --line: #2F4049;
+    --accent: #86B6FF; --accent-ink: #08172E; --accent-soft: #1B3050;
+    --unsure: #FFC676; --unsure-line: #E79A2E; --unsure-bg: #38290F;
+    --ok: #74D6A8; --ok-bg: #12301F;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F181D; --surface: #18242B; --sunk: #121C22; --ink: #E9F0F3; --muted: #9FB2BC; --line: #2F4049;
+  --accent: #86B6FF; --accent-ink: #08172E; --accent-soft: #1B3050;
+  --unsure: #FFC676; --unsure-line: #E79A2E; --unsure-bg: #38290F;
+  --ok: #74D6A8; --ok-bg: #12301F;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-text); font-size: 17px; line-height: 1.5;
+  padding-inline: 20px; padding-block: 28px 56px;
+}
+.wrap { max-width: 1080px; margin-inline: auto; display: flex; flex-direction: column; gap: 28px; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.label {
+  font-family: var(--font-util); font-size: 0.74rem; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0;
+}
+
+/* Header */
+.top { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-end; justify-content: space-between; }
+.top-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1 1 420px; }
+h1 { font-size: 2rem; line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+.lede { margin: 0; max-width: 60ch; color: var(--muted); }
+.top-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.quiet {
+  min-height: 44px; padding: 8px 16px; border-radius: 999px;
+  background: transparent; border: 1.5px solid var(--line); font-weight: 600;
+}
+.quiet:hover { border-color: var(--accent); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+@media (max-width: 880px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Assistant column */
+.assistant { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+
+.log { padding: 16px; display: flex; flex-direction: column; gap: 12px; max-height: 310px; overflow-y: auto; }
+.turn { display: flex; flex-direction: column; gap: 4px; max-width: 88%; min-width: 0; }
+.turn.sys { align-self: flex-start; }
+.turn.you { align-self: flex-end; align-items: flex-end; }
+.turn .who { font-family: var(--font-util); font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.bubble { padding: 10px 14px; border-radius: var(--r); overflow-wrap: anywhere; }
+.sys .bubble { background: var(--sunk); border-top-left-radius: 2px; }
+.you .bubble { background: var(--accent-soft); border-top-right-radius: 2px; }
+.turn.sys.latest .bubble { font-size: 1.18rem; line-height: 1.4; background: var(--surface); border: 1.5px solid var(--ink); }
+.doubt {
+  text-decoration: underline wavy var(--unsure-line); text-decoration-thickness: 2px; text-underline-offset: 5px;
+  color: var(--unsure); font-weight: 700;
+}
+
+/* What I understood */
+.card-head { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; justify-content: space-between; padding: 14px 16px 10px; }
+.card-head .hint { margin: 0; font-size: 0.9rem; color: var(--muted); }
+.empty { margin: 0; padding: 4px 16px 18px; color: var(--muted); }
+.rows { display: flex; flex-direction: column; }
+.row {
+  display: grid; grid-template-columns: 6.6rem minmax(0, 1fr) auto; gap: 12px; align-items: center;
+  width: 100%; min-height: 56px; padding: 10px 16px; text-align: left;
+  background: transparent; border: 0; border-top: 1px solid var(--line);
+}
+.row:last-child { border-bottom-left-radius: var(--r); border-bottom-right-radius: var(--r); }
+.row:not(:disabled):hover { background: var(--sunk); }
+.row:disabled { cursor: default; }
+.row .val { font-size: 1.12rem; font-weight: 600; overflow-wrap: anywhere; }
+.pill {
+  font-family: var(--font-util); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em;
+  padding: 3px 9px; border-radius: 999px; border: 1.5px solid var(--line); color: var(--muted); white-space: nowrap;
+}
+.row.unsure { background: var(--unsure-bg); }
+.row.unsure .val { text-decoration: underline wavy var(--unsure-line); text-decoration-thickness: 2px; text-underline-offset: 5px; color: var(--unsure); }
+.row.unsure .pill { border-color: var(--unsure-line); color: var(--unsure); border-style: dashed; }
+.row.changed .pill { border-color: var(--ok); color: var(--ok); background: var(--ok-bg); }
+.row.editing { background: var(--accent-soft); }
+.row.editing .pill { border-color: var(--accent); color: var(--accent); }
+.card.cue .row.unsure { animation: doubt 0.9s ease-out 1; }
+@keyframes doubt {
+  0% { box-shadow: inset 0 0 0 0 var(--unsure-line); }
+  35% { box-shadow: inset 0 0 0 4px var(--unsure-line); }
+  100% { box-shadow: inset 0 0 0 0 var(--unsure-line); }
+}
+.set-banner { margin: 0; padding: 10px 16px; background: var(--ok-bg); color: var(--ok); font-weight: 700; border-top: 1px solid var(--line); }
+
+/* Answers */
+.choices { display: flex; flex-wrap: wrap; gap: 10px; }
+.choice {
+  min-height: 52px; padding: 10px 18px; border-radius: var(--r);
+  background: var(--surface); border: 2px solid var(--ink); font-weight: 700; text-align: left;
+}
+.choice:hover { background: var(--accent-soft); border-color: var(--accent); }
+.choice.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.choice.primary:hover { filter: brightness(1.08); }
+.choice.guess { flex: 1 1 100%; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; font-weight: 400; font-size: 1.1rem; }
+.choice.guess .n {
+  font-family: var(--font-util); font-weight: 600; width: 2rem; height: 2rem; border-radius: 50%;
+  display: grid; place-items: center; background: var(--ink); color: var(--surface);
+}
+.choice.guess b { color: var(--accent); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.choice.plain { border-color: var(--line); }
+.choice .cur { font-family: var(--font-util); font-size: 0.72rem; font-weight: 400; color: var(--muted); margin-left: 6px; }
+.choice.part { flex: 1 1 calc(50% - 5px); display: flex; flex-direction: column; gap: 2px; }
+.choice.part small { font-weight: 400; color: var(--muted); font-size: 0.9rem; }
+
+/* Always-there commands */
+.always { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; padding: 12px 16px; }
+.always .label { flex: 1 1 auto; }
+.always.used { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.cmd { min-height: 48px; padding: 8px 20px; border-radius: 999px; background: var(--sunk); border: 1.5px solid var(--line); font-weight: 700; }
+.cmd:hover { border-color: var(--accent); }
+
+/* Input */
+.inputbar { display: flex; gap: 10px; align-items: stretch; }
+.mic {
+  flex: 0 0 auto; width: 56px; min-height: 56px; border-radius: 50%; border: 0;
+  background: var(--accent); color: var(--accent-ink); display: grid; place-items: center;
+}
+.mic svg { width: 26px; height: 26px; }
+.mic.on { background: var(--unsure-line); color: var(--ink); animation: listen 1.1s ease-in-out infinite; }
+@keyframes listen { 50% { transform: scale(1.08); } }
+.say { flex: 1 1 auto; min-width: 0; min-height: 56px; padding: 8px 14px; border-radius: var(--r); border: 1.5px solid var(--line); background: var(--surface); }
+.send { flex: 0 0 auto; min-height: 56px; padding: 8px 18px; border-radius: var(--r); border: 2px solid var(--ink); background: var(--surface); font-weight: 700; }
+.status { margin: 0; color: var(--muted); font-size: 0.95rem; min-height: 1.5em; }
+.note { margin: 0; padding: 10px 14px; border-radius: var(--r); background: var(--unsure-bg); color: var(--unsure); font-size: 0.95rem; }
+
+.script { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border: 1.5px dashed var(--line); border-radius: var(--r); }
+.script-lines { display: flex; flex-wrap: wrap; gap: 8px; }
+.line-btn { min-height: 44px; padding: 8px 14px; border-radius: var(--r); border: 1.5px solid var(--line); background: var(--surface); text-align: left; font-style: italic; }
+.line-btn:hover { border-color: var(--accent); }
+
+/* Side notes */
+.notes { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.notes h2 { font-size: 1.05rem; margin: 0 0 10px; font-weight: 700; }
+.notes p { margin: 0; color: var(--muted); max-width: 60ch; }
+.shows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.shows li { padding: 12px 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: baseline; }
+.shows li:last-child { border-bottom: 1px solid var(--line); }
+.shows strong { font-weight: 700; }
+.shows span.d { grid-column: 1 / -1; color: var(--muted); font-size: 0.95rem; }
+.shows .now { visibility: hidden; font-family: var(--font-util); font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); }
+.shows li.on .now { visibility: visible; }
+.shows li.on strong { color: var(--accent); }
+.cue-list { margin: 0 0 14px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 14px; }
+.cue-list dt { font-family: var(--font-util); font-size: 0.74rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding-top: 3px; }
+.cue-list dd { margin: 0; }
+
+@media (max-width: 460px) {
+  body { font-size: 16px; padding-inline: 16px; }
+  h1 { font-size: 1.65rem; }
+  .row { grid-template-columns: 4.6rem minmax(0, 1fr) auto; gap: 8px; }
+  .choice.part { flex-basis: 100%; }
+  .send { padding-inline: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card.cue .row.unsure, .mic.on { animation: none; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="top-text">
+      <p class="label">Voice assistant prototype</p>
+      <h1>Step-Back Repair</h1>
+      <p class="lede">An assistant that fixes a misheard request in place. In this demo it mishears the day on purpose, so you can try the repair.</p>
+    </div>
+    <div class="top-actions">
+      <button type="button" class="quiet" id="soundToggle" aria-pressed="true">Sound on</button>
+      <button type="button" class="quiet" id="restart">Restart demo</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section class="assistant" aria-label="Assistant">
+      <div class="panel log" id="log" role="log" aria-live="polite" aria-label="Conversation so far"></div>
+
+      <div class="panel card" id="card">
+        <div class="card-head">
+          <p class="label">What I understood</p>
+          <p class="hint" id="cardHint"></p>
+        </div>
+        <p class="empty" id="cardEmpty">Nothing yet. Your request will appear here in four parts: who to call, day, time, and reason.</p>
+        <div class="rows" id="rows"></div>
+        <p class="set-banner" id="setBanner" hidden>Reminder set</p>
+      </div>
+
+      <div class="choices" id="choices" aria-label="Answers you can tap"></div>
+
+      <div class="panel always" id="always">
+        <p class="label">Works at every step</p>
+        <button type="button" class="cmd" id="undoBtn">Undo</button>
+        <button type="button" class="cmd" id="repeatBtn">Repeat that</button>
+      </div>
+
+      <form class="inputbar" id="inputForm" autocomplete="off">
+        <button type="button" class="mic" id="mic" aria-label="Speak">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"></rect><path d="M5 11a7 7 0 0 0 14 0" fill="none"></path><path d="M12 18v3" fill="none"></path></svg>
+        </button>
+        <input class="say" id="say" type="text" aria-label="Type what you would say" placeholder="Or type what you would say">
+        <button type="submit" class="send" id="send">Send</button>
+      </form>
+      <p class="status" id="status" aria-live="polite"></p>
+      <p class="note" id="micNote" hidden></p>
+
+      <div class="script">
+        <p class="label">Demo helper: tap a line to say it</p>
+        <div class="script-lines" id="scriptLines"></div>
+      </div>
+    </section>
+
+    <aside class="notes">
+      <section>
+        <h2>The scenario</h2>
+        <p>A person with a communication and language disorder asks for a reminder to call the pharmacy on Thursday afternoon to refill a prescription. The assistant hears Tuesday.</p>
+      </section>
+
+      <section>
+        <h2>What the repair does</h2>
+        <ul class="shows" id="shows">
+          <li data-k="confirm"><strong>Confirm before acting</strong><span class="now">Now</span><span class="d">When it is unsure, it says what it understood in plain words and asks.</span></li>
+          <li data-k="guess"><strong>Offer its best guesses</strong><span class="now">Now</span><span class="d">After a no, it offers its two closest readings. Tap one or say its number.</span></li>
+          <li data-k="fix"><strong>Fix only the wrong part</strong><span class="now">Now</span><span class="d">One detail changes. Everything else is kept.</span></li>
+          <li data-k="always"><strong>Undo and repeat, always</strong><span class="now">Now</span><span class="d">Both commands work at every step. Repeat speaks more slowly.</span></li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>The uncertainty cue</h2>
+        <dl class="cue-list">
+          <dt>Sound</dt><dd>Two rising notes, played just before the word it doubts.</dd>
+          <dt>Touch</dt><dd>Two short buzzes on phones that vibrate.</dd>
+          <dt>Sight</dt><dd>A <span class="doubt">wavy underline</span> and a Not sure tag on that word only.</dd>
+        </dl>
+        <button type="button" class="quiet" id="playCue">Play the cue</button>
+      </section>
+
+      <section>
+        <h2>Ways to answer</h2>
+        <p>Speak with the microphone, tap an answer, or type. Speech input needs Chrome or Edge and microphone permission. Tapping and typing work everywhere.</p>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------- Vocabulary ----------
+  var SLOTS = ['who', 'day', 'time', 'why'];
+  var LABEL = { who: 'Who to call', day: 'Day', time: 'Time', why: 'Reason' };
+  var PART = { who: 'person to call', day: 'day', time: 'time', why: 'reason' };
+  var QUESTION = { who: 'Who should you call?', day: 'Which day?', time: 'What time of day?', why: 'What is the call for?' };
+  var KEYS = {
+    who: [['pharmacy', 'the pharmacy'], ['doctor', 'the doctor'], ['dentist', 'the dentist']],
+    day: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'Today', 'Tomorrow'].map(function (d) { return [d.toLowerCase(), d]; }),
+    time: [['morning', 'morning'], ['afternoon', 'afternoon'], ['evening', 'evening']],
+    why: [['refill', 'refill your prescription'], ['question', 'ask a question'], ['order', 'check an order']]
+  };
+  // The scripted error: a day that sounds close to the one that was said.
+  var MISHEAR = { Thursday: 'Tuesday', Tuesday: 'Thursday', Monday: 'Sunday', Sunday: 'Monday', Wednesday: 'Thursday', Friday: 'Thursday', Saturday: 'Sunday', Today: 'Tuesday', Tomorrow: 'Today' };
+  var YES = /\b(yes|yeah|yep|yup|correct|right|ok|okay|sure|set it|do it)\b/;
+  var NO = /\b(no|nope|nah|wrong|incorrect|not right|neither|none)\b/;
+  var HINT = {
+    idle: 'Tell me what to remind you about.',
+    confirm: 'Say yes, say no, or tell me the part to fix.',
+    guesses: 'Say one, two, or neither.',
+    pickPart: 'Say who to call, day, time, or reason.',
+    pickValue: 'Say one of the choices on the screen.'
+  };
+
+  // ---------- State ----------
+  var S, history, log, lastMsg, usedAlways;
+  var soundOn = true;
+  try { soundOn = localStorage.getItem('sbr-sound') !== 'off'; } catch (e) {}
+
+  function fresh() { return { step: 'idle', slots: null, unsure: null, changed: null, kept: false, editing: null, guesses: null }; }
+  function snap() { history.push(JSON.parse(JSON.stringify(S))); }
+
+  // ---------- Sentences ----------
+  function cap(x) { return x.charAt(0).toUpperCase() + x.slice(1); }
+  function whenParts(s) {
+    if (s.day === 'Today' || s.day === 'Tomorrow') return [{ t: s.day.toLowerCase(), slot: 'day' }, { t: ' in the ' }, { t: s.time, slot: 'time' }];
+    return [{ t: 'on ' }, { t: s.day, slot: 'day' }, { t: ' ' }, { t: s.time, slot: 'time' }];
+  }
+  function parts(s) { return [{ t: 'call ' }, { t: s.who, slot: 'who' }, { t: ' ' }].concat(whenParts(s), [{ t: ', to ' }, { t: s.why, slot: 'why' }]); }
+  function join(ps) { return ps.map(function (p) { return p.t; }).join(''); }
+  function sentence(s) { return join(parts(s)); }
+  function when(s) { return join(whenParts(s)); }
+  function withDay(day) { var g = Object.assign({}, S.slots); g.day = day; return g; }
+
+  function messageFor(prefix) {
+    var s = S.slots, text, segs = [], mark = null, lead;
+    switch (S.step) {
+      case 'idle':
+        text = 'What would you like me to do?'; segs = [{ t: text }]; break;
+      case 'confirm':
+        if (S.unsure) {
+          lead = (S.changed ? 'I changed only the ' + PART[S.changed] + '. ' : '') + "I'm not sure about the " + PART[S.unsure] + '.';
+          text = lead + ' I heard: ' + sentence(s) + '. Is that right?';
+          mark = s[S.unsure] === 'Today' || s[S.unsure] === 'Tomorrow' ? s[S.unsure].toLowerCase() : s[S.unsure];
+          segs = [{ t: lead }];
+          var acc = 'I heard: ';
+          parts(s).forEach(function (p) {
+            if (p.slot === S.unsure) { if (acc.trim()) segs.push({ t: acc }); segs.push({ cue: 'unsure' }); segs.push({ t: p.t, slow: true }); acc = ''; }
+            else acc += p.t;
+          });
+          if (acc.replace(/[\s,]/g, '')) segs.push({ t: acc + '.' });
+          segs.push({ t: 'Is that right?' });
+        } else {
+          lead = S.changed ? 'I changed only the ' + PART[S.changed] + '. Everything else is the same. ' : (S.kept ? 'Nothing changed. ' : '');
+          text = lead + cap(sentence(s)) + '. Should I set this reminder?';
+          segs = [{ cue: 'sure' }, { t: text }];
+        }
+        break;
+      case 'guesses':
+        text = 'OK. I kept everything else. Did you mean one of these?';
+        segs = [{ t: 'OK. I kept everything else. Did you mean:' }, { t: 'One: ' + when(withDay(S.guesses[0])) + '.' }, { t: 'Or two: ' + when(withDay(S.guesses[1])) + '.' }, { t: 'You can also say neither.' }];
+        break;
+      case 'pickPart':
+        text = 'Which part should I change?';
+        segs = [{ t: text + ' Who to call, the day, the time, or the reason.' }]; break;
+      case 'pickValue':
+        text = 'Only the ' + PART[S.editing] + ' will change. ' + QUESTION[S.editing]; segs = [{ t: text }]; break;
+      case 'done':
+        text = 'Done. I will remind you ' + when(s) + ' to call ' + s.who + '. Say undo if this is wrong.';
+        segs = [{ cue: 'sure' }, { t: text }]; break;
+    }
+    if (prefix) { text = prefix + text; segs.unshift({ t: prefix }); }
+    return { text: text, segs: segs, mark: mark };
+  }
+
+  // ---------- Sound, touch, speech ----------
+  var actx = null;
+  function ensureAudio() {
+    try {
+      if (!actx) { var AC = window.AudioContext || window.webkitAudioContext; if (AC) actx = new AC(); }
+      if (actx && actx.state === 'suspended') actx.resume();
+    } catch (e) {}
+  }
+  function tone(freq, at, len) {
+    if (!soundOn || !actx) return;
+    try {
+      var o = actx.createOscillator(), g = actx.createGain(), t0 = actx.currentTime + at;
+      o.type = 'sine'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.22, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
+      o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + len + 0.03);
+    } catch (e) {}
+  }
+  function buzz(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {} }
+  function playCue(kind) {
+    if (kind === 'unsure') {
+      tone(660, 0, 0.14); tone(880, 0.17, 0.2); buzz([70, 90, 70]);
+      var card = $('card'); card.classList.remove('cue'); void card.offsetWidth; card.classList.add('cue');
+    } else { tone(523, 0, 0.22); buzz(110); }
+  }
+  var speakToken = 0;
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function utter(text, rate) {
+    return new Promise(function (res) {
+      if (!soundOn || !('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') return res();
+      var done = false, tm;
+      var fin = function () { if (!done) { done = true; clearTimeout(tm); res(); } };
+      try {
+        var u = new SpeechSynthesisUtterance(text);
+        u.lang = 'en-US'; u.rate = rate; u.onend = fin; u.onerror = fin;
+        tm = setTimeout(fin, 1800 + text.length * 120 / rate);
+        window.speechSynthesis.speak(u);
+      } catch (e) { fin(); }
+    });
+  }
+  function stopSpeaking() { speakToken++; try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (e) {} }
+  function speak(segs, rate) {
+    stopSpeaking();
+    var mine = speakToken, i = 0;
+    rate = rate || 0.95;
+    setStatus('Speaking…');
+    (function next() {
+      if (mine !== speakToken) return;
+      if (i >= segs.length) { setStatus('Your turn. Speak, tap, or type.'); return; }
+      var seg = segs[i++];
+      var p = seg.cue ? (playCue(seg.cue), wait(seg.cue === 'unsure' ? 480 : 260)) : utter(seg.t, seg.slow ? rate * 0.72 : rate);
+      p.then(next);
+    })();
+  }
+
+  // ---------- Conversation log ----------
+  var MODE = { voice: 'You · spoke', tap: 'You · tapped', typed: 'You · typed', script: 'You · spoke (demo line)' };
+  function addUser(text, mode) { log.push({ who: 'you', text: text, mode: mode }); }
+  function addSys(msg, tag) { log.push({ who: 'sys', text: msg.text, mark: msg.mark, tag: tag }); }
+  function say(msg, tag, rate) { lastMsg = msg; addSys(msg, tag); render(); speak(msg.segs, rate); }
+  function announce(prefix) { say(messageFor(prefix)); }
+  function nudge() {
+    var text = S.step === 'done' ? 'The reminder is set. Say undo to change it.' : "Sorry, I didn't catch that. " + HINT[S.step];
+    say({ text: text, segs: [{ t: text }], mark: null });
+  }
+
+  // ---------- Understanding what the person said ----------
+  function mentions(t, slot) {
+    var out = [];
+    KEYS[slot].forEach(function (k) {
+      var m = new RegExp('\\b' + k[0] + '\\b').exec(t);
+      if (m) out.push({ idx: m.index, value: k[1] });
+    });
+    return out.sort(function (a, b) { return a.idx - b.idx; });
+  }
+  function findCorrection(t) {
+    var order = ['day', 'time', 'who', 'why'];
+    for (var i = 0; i < order.length; i++) {
+      var slot = order[i];
+      var m = mentions(t, slot).filter(function (x) { return x.value !== S.slots[slot]; });
+      if (m.length) return { slot: slot, value: m[m.length - 1].value };
+    }
+    return null;
+  }
+  function pick(t, slot, fallback) { var m = mentions(t, slot); return m.length ? m[m.length - 1].value : fallback; }
+
+  function hearRequest(t) {
+    snap();
+    var said = { who: pick(t, 'who', 'the pharmacy'), day: pick(t, 'day', 'Thursday'), time: pick(t, 'time', 'afternoon'), why: pick(t, 'why', 'refill your prescription') };
+    var heard = Object.assign({}, said); heard.day = MISHEAR[said.day];
+    var second = ['Today', 'Tomorrow', 'Friday'].filter(function (d) { return d !== said.day && d !== heard.day; })[0];
+    S = fresh(); S.step = 'confirm'; S.slots = heard; S.unsure = 'day'; S.guesses = [said.day, second];
+    announce();
+  }
+  function go(step, patch) {
+    snap(); S.step = step; S.kept = false;
+    if (step !== 'confirm') S.changed = null;
+    if (step === 'done') { S.unsure = null; S.editing = null; }
+    Object.assign(S, patch || {});
+    announce();
+  }
+  function applyFix(slot, value) {
+    snap();
+    var same = S.slots[slot] === value;
+    S.slots[slot] = value; S.changed = same ? null : slot; S.kept = same; S.editing = null;
+    if (S.unsure === slot) S.unsure = null;
+    S.step = 'confirm';
+    announce();
+  }
+
+  function interpret(t) {
+    var c, m;
+    switch (S.step) {
+      case 'idle': return hearRequest(t);
+      case 'confirm':
+        c = findCorrection(t); if (c) return applyFix(c.slot, c.value);
+        if (NO.test(t)) return go(S.unsure ? 'guesses' : 'pickPart');
+        if (YES.test(t)) return go('done');
+        return nudge();
+      case 'guesses':
+        c = findCorrection(t); if (c) return applyFix(c.slot, c.value);
+        if (/\b(neither|none|no|nope|other|something else)\b/.test(t)) return go('pickPart');
+        if (/\b(first|one|1)\b/.test(t)) return applyFix('day', S.guesses[0]);
+        if (/\b(second|two|2)\b/.test(t)) return applyFix('day', S.guesses[1]);
+        return nudge();
+      case 'pickPart':
+        c = findCorrection(t); if (c) return applyFix(c.slot, c.value);
+        if (/\b(day|date|when)\b/.test(t)) return go('pickValue', { editing: 'day' });
+        if (/\b(time|morning|afternoon|evening)\b/.test(t)) return go('pickValue', { editing: 'time' });
+        if (/\b(who|call|person|pharmacy|doctor|dentist)\b/.test(t)) return go('pickValue', { editing: 'who' });
+        if (/\b(reason|why|what for)\b/.test(t)) return go('pickValue', { editing: 'why' });
+        return nudge();
+      case 'pickValue':
+        m = mentions(t, S.editing); if (m.length) return applyFix(S.editing, m[m.length - 1].value);
+        c = findCorrection(t); if (c) return applyFix(c.slot, c.value);
+        return nudge();
+      default: return nudge();
+    }
+  }
+
+  function doUndo(text, mode) {
+    addUser(text, mode); usedAlways = true;
+    if (!history.length) { var t = 'There is nothing to undo yet. ' + HINT[S.step]; return say({ text: t, segs: [{ t: t }], mark: null }); }
+    var wasDone = S.step === 'done';
+    S = history.pop();
+    announce(wasDone ? 'Undone. The reminder is not set. ' : 'Undone. ');
+  }
+  function doRepeat(text, mode) {
+    addUser(text, mode); usedAlways = true;
+    say(lastMsg, 'Repeated, slower', 0.74);
+  }
+  function handle(raw, mode, act) {
+    var text = (raw || '').trim(); if (!text) return;
+    ensureAudio();
+    var t = text.toLowerCase();
+    if (!act) {
+      if (/\b(undo|go back)\b/.test(t)) return doUndo(text, mode);
+      if (/\b(repeat|say that again|say it again)\b/.test(t)) return doRepeat(text, mode);
+    }
+    addUser(text, mode); usedAlways = false;
+    if (act) act(); else interpret(t);
+  }
+
+  // ---------- Rendering ----------
+  function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+  function setStatus(t) { $('status').textContent = t; }
+
+  function renderLog() {
+    var box = $('log'); box.textContent = '';
+    var lastSys = -1; log.forEach(function (m, i) { if (m.who === 'sys') lastSys = i; });
+    log.forEach(function (m, i) {
+      var turn = el('div', 'turn ' + m.who + (i === lastSys ? ' latest' : ''));
+      turn.appendChild(el('span', 'who', m.who === 'sys' ? 'Assistant' + (m.tag ? ' · ' + m.tag : '') : MODE[m.mode] || 'You'));
+      var b = el('div', 'bubble');
+      var at = m.mark ? m.text.indexOf(m.mark, Math.max(0, m.text.indexOf('I heard'))) : -1;
+      if (at >= 0) {
+        b.appendChild(document.createTextNode(m.text.slice(0, at)));
+        b.appendChild(el('span', 'doubt', m.mark));
+        b.appendChild(document.createTextNode(m.text.slice(at + m.mark.length)));
+      } else b.textContent = m.text;
+      turn.appendChild(b); box.appendChild(turn);
+    });
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function renderCard() {
+    var rows = $('rows'); rows.textContent = '';
+    var has = !!S.slots, done = S.step === 'done';
+    $('cardEmpty').hidden = has; $('setBanner').hidden = !done;
+    $('cardHint').textContent = has && !done ? 'Tap a part to change only that part.' : '';
+    if (!has) return;
+    var touched = S.changed || S.editing;
+    SLOTS.forEach(function (k) {
+      var state = S.editing === k ? 'editing' : S.unsure === k ? 'unsure' : S.changed === k ? 'changed' : '';
+      var pill = state === 'editing' ? 'Changing' : state === 'unsure' ? 'Not sure ?' : state === 'changed' ? 'Changed' : touched ? 'Kept' : 'Heard';
+      var row = el('button', 'row ' + state); row.type = 'button'; row.disabled = done;
+      row.setAttribute('aria-label', LABEL[k] + ': ' + S.slots[k] + '. ' + pill.replace(' ?', '') + (done ? '' : '. Tap to change.'));
+      row.appendChild(el('span', 'label', LABEL[k]));
+      row.appendChild(el('span', 'val', k === 'who' || k === 'why' ? cap(S.slots[k]) : cap(S.slots[k])));
+      row.appendChild(el('span', 'pill', pill));
+      row.addEventListener('click', function () {
+        handle('Change the ' + PART[k], 'tap', function () { go('pickValue', { editing: k }); });
+      });
+      rows.appendChild(row);
+    });
+  }
+
+  function addChoice(box, cls, sayText, act, build) {
+    var b = el('button', 'choice ' + cls); b.type = 'button';
+    if (typeof build === 'function') build(b); else b.textContent = build || sayText;
+    b.addEventListener('click', function () { handle(sayText, 'tap', act); });
+    box.appendChild(b);
+  }
+  function renderChoices() {
+    var box = $('choices'); box.textContent = '';
+    if (S.step === 'confirm' && S.unsure) {
+      addChoice(box, 'primary', "Yes, that's right", function () { go('done'); });
+      addChoice(box, '', "No, that's wrong", function () { go('guesses'); });
+    } else if (S.step === 'confirm') {
+      addChoice(box, 'primary', 'Yes, set the reminder', function () { go('done'); });
+      addChoice(box, '', 'No, change a part', function () { go('pickPart'); });
+    } else if (S.step === 'guesses') {
+      S.guesses.forEach(function (day, i) {
+        var g = withDay(day);
+        addChoice(box, 'guess', cap(when(g)), function () { applyFix('day', day); }, function (b) {
+          b.appendChild(el('span', 'n', String(i + 1)));
+          var line = el('span');
+          parts(g).forEach(function (p, j) { var txt = j === 0 ? cap(p.t) : p.t; line.appendChild(p.slot === 'day' ? el('b', '', txt) : document.createTextNode(txt)); });
+          b.appendChild(line);
+        });
+      });
+      addChoice(box, 'plain', 'Neither of these', function () { go('pickPart'); });
+    } else if (S.step === 'pickPart') {
+      SLOTS.forEach(function (k) {
+        addChoice(box, 'part', 'The ' + PART[k], function () { go('pickValue', { editing: k }); }, function (b) {
+          b.appendChild(el('span', '', LABEL[k])); b.appendChild(el('small', '', 'Now: ' + S.slots[k]));
+        });
+      });
+    } else if (S.step === 'pickValue') {
+      var k = S.editing;
+      KEYS[k].forEach(function (o) {
+        addChoice(box, o[1] === S.slots[k] ? 'plain' : '', cap(o[1]), function () { applyFix(k, o[1]); }, function (b) {
+          b.appendChild(document.createTextNode(cap(o[1])));
+          if (o[1] === S.slots[k]) b.appendChild(el('span', 'cur', S.unsure === k ? 'heard' : 'current'));
+        });
+      });
+    }
+    box.hidden = !box.childNodes.length;
+  }
+
+  function scriptFor() {
+    switch (S.step) {
+      case 'idle': return ['Remind me to call the pharmacy on Thursday afternoon to refill my prescription.'];
+      case 'confirm': return S.unsure ? ['No.', 'Not ' + S.slots.day + ', ' + S.guesses[0] + '.', 'Repeat that.'] : ['Yes.', 'Undo.', 'Repeat that.'];
+      case 'guesses': return ['The first one.', 'Neither.', 'Undo.'];
+      case 'pickPart': return ['The day.', 'Undo.'];
+      case 'pickValue': return [S.editing === 'day' && S.guesses ? S.guesses[0] + '.' : cap(KEYS[S.editing][1][1]) + '.', 'Undo.'];
+      default: return ['Undo.', 'Repeat that.'];
+    }
+  }
+  function renderScript() {
+    var box = $('scriptLines'); box.textContent = '';
+    scriptFor().forEach(function (line) {
+      var b = el('button', 'line-btn', '“' + line + '”'); b.type = 'button';
+      b.addEventListener('click', function () { handle(line, 'script'); });
+      box.appendChild(b);
+    });
+  }
+  function renderNotes() {
+    var show = S.step === 'confirm' ? (S.changed ? 'fix' : 'confirm') : S.step === 'guesses' ? 'guess' : (S.step === 'pickPart' || S.step === 'pickValue') ? 'fix' : '';
+    Array.prototype.forEach.call($('shows').children, function (li) {
+      var k = li.getAttribute('data-k');
+      li.classList.toggle('on', usedAlways ? k === 'always' : k === show);
+    });
+    $('always').classList.toggle('used', !!usedAlways);
+  }
+  function render() { renderLog(); renderCard(); renderChoices(); renderScript(); renderNotes(); }
+
+  // ---------- Controls ----------
+  function start(speakIt) {
+    stopSpeaking();
+    S = fresh(); history = []; log = []; usedAlways = false;
+    var m = messageFor('Hi. ');
+    lastMsg = m; addSys(m); render();
+    if (speakIt) speak(m.segs); else setStatus('Your turn. Speak, tap, or type.');
+  }
+  $('undoBtn').addEventListener('click', function () { ensureAudio(); doUndo('Undo', 'tap'); });
+  $('repeatBtn').addEventListener('click', function () { ensureAudio(); doRepeat('Repeat that', 'tap'); });
+  $('restart').addEventListener('click', function () { ensureAudio(); start(true); });
+  $('playCue').addEventListener('click', function () { ensureAudio(); playCue('unsure'); });
+  $('inputForm').addEventListener('submit', function (e) {
+    e.preventDefault(); var v = $('say').value; $('say').value = ''; handle(v, 'typed');
+  });
+  function paintSound() { $('soundToggle').textContent = soundOn ? 'Sound on' : 'Sound off'; $('soundToggle').setAttribute('aria-pressed', String(soundOn)); }
+  $('soundToggle').addEventListener('click', function () {
+    soundOn = !soundOn; if (!soundOn) stopSpeaking(); else ensureAudio();
+    try { localStorage.setItem('sbr-sound', soundOn ? 'on' : 'off'); } catch (e) {}
+    paintSound(); if (!soundOn) setStatus('Your turn. Speak, tap, or type.');
+  });
+
+  // Microphone (Chrome and Edge). Falls back to tapping and typing when it is missing or blocked.
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition, rec = null, listening = false;
+  function micNote(t) { var n = $('micNote'); n.textContent = t; n.hidden = !t; }
+  $('mic').addEventListener('click', function () {
+    ensureAudio();
+    if (!SR) return micNote('Speech input is not supported in this browser. Tap an answer or a demo line, or type what you would say.');
+    if (listening && rec) { try { rec.stop(); } catch (e) {} return; }
+    stopSpeaking(); micNote('');
+    try {
+      rec = new SR(); rec.lang = 'en-US'; rec.interimResults = false; rec.maxAlternatives = 1;
+      rec.onstart = function () { listening = true; $('mic').classList.add('on'); setStatus('Listening…'); };
+      rec.onresult = function (e) { var txt = e.results[0][0].transcript; handle(txt, 'voice'); };
+      rec.onerror = function (e) {
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') micNote('The microphone is blocked in this view. Tap an answer or a demo line, or type what you would say.');
+        else if (e.error === 'no-speech') micNote("I didn't hear anything. Tap the microphone and try again.");
+        else micNote('Speech input stopped (' + e.error + '). Tap an answer or type instead.');
+      };
+      rec.onend = function () { listening = false; $('mic').classList.remove('on'); if ($('status').textContent === 'Listening…') setStatus('Your turn. Speak, tap, or type.'); };
+      rec.start();
+    } catch (err) { micNote('Speech input could not start here. Tap an answer or type instead.'); }
+  });
+
+  paintSound();
+  start(false);
+})();
+</script>
+</body></html>
